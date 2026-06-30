@@ -273,7 +273,7 @@ docker compose up -d --build     # 重建(代码更新后)
 🚧 部分 macOS/Windows 采集路径(push agent)待更多真机验证。
 全套自动化测试(`python3 -m pytest tests/ -q`)覆盖配置 schema/加载/校验、数据契约/整合、渲染管线真实出图、风格调度、Linux 采集端到端、主服务全部 API、设置页与实时预览、NAS 多设备合并。
 
-路线:**P0 Mac ✅ → P1 NAS Docker ✅ → P2 风格系统 → P3 扩展**。
+路线:**P0 Mac ✅ → P1 NAS Docker ✅ → P2 风格系统 → P3 扩展**。三种常开主机随你选:**Mac(.dmg)/ Windows(托盘 EXE)/ NAS(Docker)**,看板内容、Kindle/平板取图完全一致。
 
 ## License
 
@@ -498,6 +498,16 @@ docker compose down              # stop
 docker compose up -d --build     # rebuild (after code updates)
 ```
 
+## Windows desktop deploy (tray EXE)
+
+No Mac, don't want to bother with Docker? Run it on an **always-on Windows PC** instead, as **a single tray app**: double-click to live in the system tray — as long as it's running, your Kindle / tablet can fetch images from it.
+
+**One-click install (no command line)**: copy the whole repo folder to a local drive → **double-click `双击安装.bat` in the root**. It automatically: detects Python (installs from a China mirror if missing) → installs deps → builds `MoshuiDesktop.exe` → launches into the tray → enables autostart on first run. On first launch SmartScreen may warn: click "More info → Run anyway" once; allow the firewall prompt when the service first starts (otherwise LAN devices can't connect).
+
+Then: **left-click the tray icon** opens the settings page; **right-click** for restart service, switch language, flash/remove Kindle, check for updates, quit (choose "stop service too" or "tray only, keep service running"). Config changes hot-reload, no restart.
+
+> Rendering uses the built-in Edge (Chromium engine) — no extra browser needed; if no engine exists at all, it auto-downloads a dedicated headless shell from a China mirror. Build script (advanced): `powershell -ExecutionPolicy Bypass -File installers\windows\build-win-app.ps1 <version>` (Windows only). Full details in [docs/windows-app-spec.md](docs/windows-app-spec.md).
+
 ## Data sources
 
 | Page | Source | Needs |
@@ -528,7 +538,7 @@ Styles are decoupled as "data contract + style pack": all styles reference the s
 🚧 Some macOS/Windows collection paths (push agent) await more real-device verification.
 The full automated test suite (`python3 -m pytest tests/ -q`) covers config schema/loading/validation, the data contract/integration, real render-pipeline output, style scheduling, end-to-end Linux collection, all main-service APIs, the settings page with live preview, and NAS multi-device merge.
 
-Roadmap: **P0 Mac ✅ → P1 NAS Docker ✅ → P2 style system → P3 extensions**.
+Roadmap: **P0 Mac ✅ → P1 NAS Docker ✅ → P2 style system → P3 extensions**. Pick any always-on host: **Mac (.dmg) / Windows (tray EXE) / NAS (Docker)** — dashboard content and Kindle/tablet image fetching are identical.
 
 ## License
 
