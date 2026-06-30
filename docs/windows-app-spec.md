@@ -4,7 +4,7 @@
 >
 > **真机验证结果(Windows 11 / Python 3.13 / 系统自带 Edge)**:`双击安装.bat` 一键装好 → 打包出 `MoshuiDesktop-1.0.exe`(21.4MB,PE32+ GUI)→ 托盘常驻 → 服务 `0.0.0.0:8585` 起 → **Edge 无头渲染出图正常**:局域网另一台机访问 `http://<win-ip>:8585/kindle/frame.png` 拿到 **600×800 8-bit 灰度 PNG**,中文字体清晰、排版正确(资讯页 AIHOT)。左键开设置页、切语言不掉线、退出三选一、开机自启全部就位。**核心结论:渲染管线(唯一难啃的跨平台块)在 Windows 用系统 Edge 完全正常,无需打包字体(系统字体渲染中文 OK)。**
 >
-> 本机(Linux)自检:314 测试绿(含 6 个跨平台分支测试),仅 1 个 pre-existing 无关失败(`ai_usage.web_url`)。落地详情见 §13「as-built / 已落地」,真机调试踩坑见 §14。
+> 本机(Linux)自检:309 测试绿(含 6 个跨平台分支测试)。落地详情见 §13「as-built / 已落地」,真机调试踩坑见 §14。
 >
 > 决策(2026-06-29 与浩轩确认):
 > - **渲染引擎 = Chromium 内核检测优先、缺了才下载**:先探测系统里任一 Chromium 内核浏览器(Edge/Chrome/Brave…,Win10/11 自带 Edge 几乎必中)→ 有就直接用、**零下载**;一个都没有 → 从**国内可直连镜像(npmmirror)**下 `chrome-headless-shell-win64` 兜底。渲染本质是调内核的 `--headless --screenshot` 命令行,跟浏览器牌子无关。Windows 无头 Edge **不会**有 macOS 的 Dock 抖动问题(那是 macOS 专属)。
