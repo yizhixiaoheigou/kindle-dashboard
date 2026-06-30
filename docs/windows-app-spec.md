@@ -4,7 +4,7 @@
 >
 > **真机验证结果(Windows 11 / Python 3.13 / 系统自带 Edge)**:`双击安装.bat` 一键装好 → 打包出 `MoshuiDesktop-1.0.exe`(21.4MB,PE32+ GUI)→ 托盘常驻 → 服务 `0.0.0.0:8585` 起 → **Edge 无头渲染出图正常**:局域网另一台机访问 `http://<win-ip>:8585/kindle/frame.png` 拿到 **600×800 8-bit 灰度 PNG**,中文字体清晰、排版正确(资讯页 AIHOT)。左键开设置页、切语言不掉线、退出三选一、开机自启全部就位。**核心结论:渲染管线(唯一难啃的跨平台块)在 Windows 用系统 Edge 完全正常,无需打包字体(系统字体渲染中文 OK)。**
 >
-> 本机(Linux)自检:309 测试绿(含 6 个跨平台分支测试)。落地详情见 §13「as-built / 已落地」,真机调试踩坑见 §14。
+> 本机(Linux)自检:314 测试绿(含 6 个跨平台分支测试),仅 1 个 pre-existing 无关失败(`ai_usage.web_url`)。落地详情见 §13「as-built / 已落地」,真机调试踩坑见 §14。
 >
 > 决策(2026-06-29 与浩轩确认):
 > - **渲染引擎 = Chromium 内核检测优先、缺了才下载**:先探测系统里任一 Chromium 内核浏览器(Edge/Chrome/Brave…,Win10/11 自带 Edge 几乎必中)→ 有就直接用、**零下载**;一个都没有 → 从**国内可直连镜像(npmmirror)**下 `chrome-headless-shell-win64` 兜底。渲染本质是调内核的 `--headless --screenshot` 命令行,跟浏览器牌子无关。Windows 无头 Edge **不会**有 macOS 的 Dock 抖动问题(那是 macOS 专属)。
@@ -13,7 +13,7 @@
 >
 > **本文是给实现 AI 的自包含施工图。** 动手前先读项目根 `CLAUDE.md`(三条铁律 + 安全与健壮性防回归节)、`docs/mac-app-spec.md`(Mac 版对位实现,本文大量复用其思路)、`server/render/pipeline.py`(渲染管线,**唯一需要跨平台改造的核心文件**)、`server/menubar.py`(Mac 状态栏,Windows 托盘的对位范本)。
 >
-> ⚠️ **我(写代码的 AI)在 Linux 环境,无法实测 Windows。** 纯 Python 代码 + 模拟测试能在本机写完自检;**真正出包(PyInstaller)和真机验证必须在浩轩的 Windows 机上做**(如同 build-mac-app.sh 只能在 Mac 跑)。流程:我出代码+脚本+自检测试 → 浩轩跑构建/回截图日志 → 据此迭代。
+> ⚠️ **维护约定(对后续 Windows 改动仍适用)**:在 Linux 环境无法实测 Windows——纯 Python 代码 + 模拟测试可在本机写完自检,但**出包(PyInstaller)和真机行为必须在 Windows 机上验**(如同 build-mac-app.sh 只能在 Mac 跑)。改完 Windows 相关代码:本机跑 `tests/test_pipeline_win.py` 自检 → Windows 机 `双击安装.bat` 重新打包验证。
 
 ---
 
@@ -282,8 +282,8 @@ else:                         # 角色A:托盘监工(默认)
 - **freeze_support**:`win_entry.main()` 头部加 `multiprocessing.freeze_support()`(onefile 防子进程重跑整个 exe)。
 - **出包补 `--collect-all zeroconf`**(mDNS 自发现的已知 PyInstaller 盲区;缺了非致命但顺手兜上)。
 
-### 13.4 ⏳ 仍需 Windows 真机做的(本机无法完成)
-PyInstaller 出包、§12 全部真机验证项、以及出包后可能要补的 `--hidden-import`(uvicorn/zeroconf 动态导入若漏)。出包脚本已尽量用 `--collect-all uvicorn` / `--collect-submodules server` 兜底,真机若报缺模块按报错补 hidden-import 即可。
+### 13.4 发布状态(2026-06-30 已发布)
+代码已推 GitHub `main`(`yizhixiaoheigou/kindle-dashboard`),`MoshuiDesktop-1.0.exe` 已挂 v1.0 Release(与 `.dmg`/`.apk` 同 Release;`updater.check_release(asset_suffix='.exe')` 按资产文件名取版本,「检查更新」已对 Windows 生效)。最终用户:仓库根 `双击安装.bat` 一键装。⏳ 仅剩两项未真机覆盖(非阻塞):Kindle 刷机(WiFi 连法,手边无越狱 Kindle 接 Windows)、引擎兜底下载(真机自带 Edge,从未触发 npmmirror 下载分支)。
 
 ---
 
