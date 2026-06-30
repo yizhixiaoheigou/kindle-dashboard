@@ -2,7 +2,11 @@
 
 > 总览见 [README](../README.md)。本文补充各数据源配置、Kindle 前置、故障排查、验证状态。
 
-## 一、Mac 服务
+## 一、装服务(三选一:Mac / Windows / NAS)
+
+> 看板服务跑在哪台常开机器都行,Kindle/平板取图完全一致。下面是 **Mac**;**Windows** 见 [README「Windows 桌面部署」](../README.md#windows-桌面部署托盘-exe) + 施工图 [windows-app-spec.md](windows-app-spec.md)(双击 `双击安装.bat` 一键装);**NAS Docker** 见 [README「NAS Docker 部署」](../README.md#nas-docker-部署)。
+
+### Mac 服务
 
 **推荐:图形安装(.dmg)。** 到 [Releases](https://github.com/yizhixiaoheigou/kindle-dashboard/releases) 下载 `MoshuiDesktop-x.x.dmg` → 拖进「应用程序」→ 双击。首启自动建环境(复制源码到 `~/Library/Application Support/墨水桌面看板/repo` 建 venv)、起服务、状态栏出图标;首次联网下载**无头渲染引擎 chrome-headless-shell ~100MB**(渲染不弹 Dock、已有则跳过)+ **Python 依赖 ~40MB**(测速自动选官方/清华源)。**装/设置/刷退 Kindle/检查更新/卸载全在状态栏菜单**。未签名,首开右键「打开」或系统设置放行一次。
 
