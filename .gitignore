@@ -28,9 +28,18 @@ cache.json
 # 本地构建/自检产物(APK、离线渲染图、自检脚本输出);体积大、机器相关,不入库
 work/
 *.tmp
-# 分发包(APK / DMG)只走 GitHub Release、绝不入库;放仓库根方便拖到 Release 也不会被跟踪
+# 分发包(APK / DMG / EXE)只走 GitHub Release、绝不入库;放仓库根方便拖到 Release 也不会被跟踪
 *.apk
 *.dmg
+*.exe
+
+# Windows 打包产物(build-win-app.ps1 生成,全是可重建的中间物,绝不入库)
+.venv-win/
+dist/
+build/
+APP_VERSION
+build-pyinstaller.log
+installers/windows/app.ico
 
 # Python
 __pycache__/

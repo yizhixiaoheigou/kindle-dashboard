@@ -85,8 +85,8 @@ Kindle 当瘦客户端,只定时拉一张渲染好的 PNG 刷上屏;采集、聚
 
 ## 前置要求
 
-- 一台**常开**的 Mac 或 NAS(NAS 用 Docker 部署,见下方)
-- 已安装 **Chrome 或 Chromium** 用于渲染(没有也行:安装时可选自动下载内置 chromium,装进虚拟环境、不动系统)
+- 一台**常开**的 Mac、Windows 或 NAS(Mac=.dmg / Windows=托盘 EXE / NAS=Docker,见下方)
+- 已安装 **Chrome / Chromium / Edge** 任一 Chromium 内核用于渲染(Win10/11 自带 Edge 即可;Mac/NAS 没有的话安装时可自动下载,装进虚拟环境、不动系统)
 - 一台**已越狱**且**已开启 SSH** 的 Kindle(本项目不含越狱工具;标准越狱流程装的 MRPI 已自带 fbink)
 - 数据线用支持**数据传输**的(非纯充电线)
 
@@ -232,6 +232,16 @@ docker compose restart           # 重启(配置不丢)
 docker compose down              # 停止
 docker compose up -d --build     # 重建(代码更新后)
 ```
+
+## Windows 桌面部署(托盘 EXE)
+
+不用 Mac、不想折腾 Docker?在一台**常开的 Windows 电脑**上跑也行,做成**一个托盘程序**:双击进系统托盘常驻,只要开着,Kindle / 平板就能来本机取图。
+
+**一键安装(不碰命令行)**:把整个仓库文件夹拷到本地盘 → **双击根目录的 `双击安装.bat`**。它自动:检测 Python(没有就从国内镜像装)→ 装依赖 → 打包出 `MoshuiDesktop.exe` → 启动进托盘 → 首次运行自动设好开机自启。首次运行 SmartScreen 会拦一下:点「更多信息 → 仍要运行」放行一次;第一次起服务弹防火墙记得点「允许」(否则局域网设备连不上)。
+
+之后:**左键托盘图标**直接开设置页;**右键**菜单有重启服务、切语言、刷入/退出 Kindle、检查更新、退出(可选「连服务退」或「只退托盘、服务后台续跑」)。配置改完热重载,不用重启。
+
+> 渲染用 Windows 自带的 Edge(Chromium 内核),无需额外装浏览器;万一一个内核都没有,会自动从国内镜像下载专用无头壳兜底。出包脚本(进阶):`powershell -ExecutionPolicy Bypass -File installers\windows\build-win-app.ps1 <版本号>`(只能在 Windows 上跑)。完整说明见 [docs/windows-app-spec.md](docs/windows-app-spec.md)。
 
 ## 数据源一览
 

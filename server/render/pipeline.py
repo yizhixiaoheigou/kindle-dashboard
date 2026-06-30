@@ -9,6 +9,7 @@ ESP32 支线已按开源方案弃用,不再搬运。
 """
 import io
 import os
+import sys
 import glob
 import shutil
 import signal
@@ -16,9 +17,29 @@ import subprocess
 import tempfile
 import threading
 import time
+from pathlib import Path
 from dataclasses import dataclass
 
 from PIL import Image
+
+# psutil 仅用于 Windows 上按命令行标记精准清僵尸渲染进程(POSIX 用 pkill,不依赖它)。
+# 没装就降级:Windows 无 psutil 时全局清理走"按映像名兜底",可能略宽但不报错。
+try:
+    import psutil
+except Exception:                # pragma: no cover - 仅在未装 psutil 的环境
+    psutil = None
+
+IS_WIN = sys.platform == "win32"
+
+# 起渲染子进程的平台参数:
+#   POSIX  —— 独立会话(start_new_session),便于按进程组一刀杀。
+#   Windows —— 新进程组(便于 taskkill /T 杀整棵树)+ 不弹黑色 cmd 窗(CREATE_NO_WINDOW)。
+_CREATE_NO_WINDOW = 0x08000000
+_CREATE_NEW_PROCESS_GROUP = 0x00000200
+if IS_WIN:
+    _SPAWN_KW = {"creationflags": _CREATE_NO_WINDOW | _CREATE_NEW_PROCESS_GROUP}
+else:
+    _SPAWN_KW = {"start_new_session": True}
 
 _ROT = {
     0: None,
@@ -45,6 +66,32 @@ _CANDIDATES = [
 ]
 
 
+def _win_candidates() -> list:
+    """Windows 上的 Chromium 内核浏览器候选路径(按盘符/安装位置从环境变量拼,兼容非 C 盘)。
+    Win10/11 自带 Edge,几乎必中;渲染只需任一内核,不挑牌子。"""
+    if not IS_WIN:
+        return []
+    bases = [
+        os.environ.get("ProgramFiles", r"C:\Program Files"),
+        os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+        os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local")),
+    ]
+    rels = [
+        r"Microsoft\Edge\Application\msedge.exe",
+        r"Google\Chrome\Application\chrome.exe",
+        r"BraveSoftware\Brave-Browser\Application\brave.exe",
+        r"Vivaldi\Application\vivaldi.exe",
+        r"Chromium\Application\chrome.exe",
+    ]
+    out = []
+    for base in bases:
+        if not base:
+            continue
+        for rel in rels:
+            out.append(os.path.join(base, rel))
+    return out
+
+
 def _playwright_chrome() -> str:
     """探测 playwright 自动下载的 chromium(venv 内安装,不依赖系统 Chrome)。"""
     home = os.path.expanduser("~")
@@ -52,6 +99,9 @@ def _playwright_chrome() -> str:
         home + "/Library/Caches/ms-playwright/chromium-*/chrome-mac*/Chromium.app/Contents/MacOS/Chromium",
         home + "/.cache/ms-playwright/chromium-*/chrome-linux*/chrome",
     ]
+    if IS_WIN:
+        local = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+        patterns.append(os.path.join(local, "ms-playwright", "chromium-*", "chrome-win", "chrome.exe"))
     for pat in patterns:
         hits = sorted(glob.glob(pat))
         if hits:
@@ -71,6 +121,15 @@ def _headless_shell() -> str:
         home + "/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-mac*/chrome-headless-shell",
         home + "/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux*/chrome-headless-shell",
     ]
+    if IS_WIN:
+        # Windows 兜底下载落地处(get-headless-shell.ps1)+ puppeteer/playwright 缓存。
+        appdata = os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming"))
+        local = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+        patterns = [
+            os.path.join(appdata, "墨水桌面看板", "chrome-headless-shell", "*", "chrome-headless-shell.exe"),
+            os.path.join(local, "puppeteer", "chrome-headless-shell", "*", "chrome-headless-shell-*", "chrome-headless-shell.exe"),
+            os.path.join(local, "ms-playwright", "chromium_headless_shell-*", "chrome-headless-shell-win*", "chrome-headless-shell.exe"),
+        ]
     for pat in patterns:
         hits = sorted(glob.glob(pat))
         if hits:
@@ -92,12 +151,16 @@ def find_chrome() -> str:
     shell = _headless_shell()    # 优先无头壳:macOS 上它不弹 Dock
     if shell:
         return shell
-    for name in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable",
-                 "microsoft-edge", "microsoft-edge-stable", "brave-browser", "vivaldi"):
+    names = ["chromium", "chromium-browser", "google-chrome", "google-chrome-stable",
+             "microsoft-edge", "microsoft-edge-stable", "brave-browser", "vivaldi"]
+    if IS_WIN:
+        # Windows 上浏览器一般不在 PATH,which 多半空;真正命中的是下面 _win_candidates 的固定路径。
+        names = ["msedge", "chrome", "brave", "vivaldi", "chromium"]
+    for name in names:
         p = shutil.which(name)
         if p:
             return p
-    for p in _CANDIDATES:
+    for p in (_win_candidates() + _CANDIDATES):
         if os.path.exists(p):
             return p
     return _playwright_chrome()
@@ -145,7 +208,19 @@ _RENDER_MUTEX = threading.Lock()
 
 
 def _pkill(pattern: str) -> None:
-    """按命令行标记杀进程(只动带该标记的渲染 Chrome,绝不碰本服务/他人进程或用户自己的浏览器)。"""
+    """按命令行标记杀进程(只动带该标记的渲染 Chrome,绝不碰本服务/他人进程或用户自己的浏览器)。
+    POSIX 走 pkill -f;Windows 没有 pkill,用 psutil 按 cmdline 含标记精准杀(只杀我们这次渲染的那棵)。"""
+    if IS_WIN:
+        if psutil is None:
+            return                  # 没 psutil 就不做全局清理(单次渲染已由 _kill_group 的 taskkill /T 收干净)
+        for p in psutil.process_iter(["pid", "cmdline"]):
+            try:
+                cmd = p.info.get("cmdline") or []
+                if any(pattern in (arg or "") for arg in cmd):
+                    p.kill()
+            except Exception:
+                pass
+        return
     try:
         subprocess.run(["pkill", "-9", "-f", pattern], capture_output=True, timeout=5)
     except Exception:
@@ -153,12 +228,32 @@ def _pkill(pattern: str) -> None:
 
 
 def _kill_group(proc) -> None:
-    """整组杀掉一次渲染(Popen 用 start_new_session,主进程+全部 Chrome 子进程同属一个进程组)。
-    超时时一刀清干净,既释放渲染锁,又不留继承管道的子进程把后续渲染拖死。"""
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-    except Exception:
-        pass
+    """整组杀掉一次渲染:主进程 + 它派生的全部 Chrome 子进程一起清。
+    超时时一刀清干净,既释放渲染锁,又不留继承管道的子进程把后续渲染拖死。
+    POSIX:Popen 用 start_new_session → 按进程组 killpg。
+    Windows:Popen 用 CREATE_NEW_PROCESS_GROUP → taskkill /T 连子进程树整棵杀(psutil 兜底子进程)。"""
+    if IS_WIN:
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           capture_output=True, timeout=5,
+                           creationflags=_CREATE_NO_WINDOW)
+        except Exception:
+            pass
+        if psutil is not None:       # 兜底:taskkill 没覆盖到的子进程再扫一遍
+            try:
+                parent = psutil.Process(proc.pid)
+                for child in parent.children(recursive=True):
+                    try:
+                        child.kill()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except Exception:
+            pass
     try:
         proc.wait(timeout=5)        # 回收僵尸,别留 defunct
     except Exception:
@@ -209,8 +304,9 @@ def _shot_to_image(html: str, rc: RenderConfig) -> Image.Image:
             f"--force-device-scale-factor={scale:.4f}",
             f"--window-size={bw},{bh}",
             "--default-background-color=FFFFFFFF",
-            f"--user-data-dir={td}/ud",
-            f"--screenshot={png_path}", f"file://{html_path}",
+            f"--user-data-dir={os.path.join(td, 'ud')}",
+            # file:// URL 必须用 as_uri():Windows 路径含盘符+反斜杠,手拼 file://C:\... 会失败。
+            f"--screenshot={png_path}", Path(html_path).as_uri(),
         ]
         # 串行化:同一时刻只跑一个 Chrome(预览与主循环互不抢资源)。
         # ⚠️ 绝不能用 subprocess.run(capture_output=True, timeout=) —— Chrome 派生的渲染子进程会继承
@@ -220,7 +316,7 @@ def _shot_to_image(html: str, rc: RenderConfig) -> Image.Image:
         # 超时按整个进程组一刀杀(os.killpg),保证锁一定释放、子进程一定清。
         with _RENDER_MUTEX:
             proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL, start_new_session=True)
+                                    stderr=subprocess.DEVNULL, **_SPAWN_KW)
             # ⚠️ 截图一写好就立刻收工,绝不等 Chrome 自己退出(2026-06-08 真机定位):
             # 国内/弱网下,全新 profile 的 Chrome 截完图后会被 GoogleUpdater(--wake-all)+ GCM 注册
             # 的后台联网拖住 —— 连 Google 被 GFW 拦截,SSL 握手反复失败重试,要 ~30s 才肯退出。

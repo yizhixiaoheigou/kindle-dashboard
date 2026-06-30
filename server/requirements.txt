@@ -9,3 +9,7 @@ PyYAML>=5.4
 # 仅当一台浏览器都没有、需要自动下载内置 chromium 时,安装脚本才按需临时装(见 bootstrap.sh / install.sh)。
 zeroconf>=0.131
 rumps>=0.4; sys_platform == "darwin"
+# Windows 托盘 App(server/tray_win.py)+ 渲染进程精准清理(pipeline._pkill/_kill_group)。
+# 出包时 build-win-app.ps1 也会显式装一遍(含 pyinstaller)。
+pystray>=0.19; sys_platform == "win32"
+psutil>=5.9; sys_platform == "win32"
